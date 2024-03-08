@@ -46,6 +46,7 @@
     state: present
     size: "{{ volume_size }}"
     name: "{{ volume_name }}"
+    volume_type: multiattach
 
 - name: "Attach the volumes to node"
   openstack.cloud.server_volume:
