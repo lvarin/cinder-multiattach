@@ -1,0 +1,72 @@
+---
+
+- name: Update all packages on a Debian/Ubuntu
+  apt:
+      update_cache: yes
+      upgrade: dist
+
+- name: Reboot box if kernel/libs updated and requested by the system
+  shell: sleep 10 && /sbin/shutdown -r now 'Rebooting box to update system libs/kernel as needed' 
+  args:
+      removes: /var/run/reboot-required
+  async: 300
+  poll: 0
+  ignore_errors: true
+
+- name: Wait for system to become reachable again
+  wait_for_connection:
+      delay: 60
+      timeout: 300
+
+- name: Verify new update (optional)
+  command: uname -mrs
+  register: uname_result
+- name: Display new kernel version
+  debug:
+      var: uname_result.stdout_lines
+
+- name: Install modules and ocfs2
+  apt:
+    name:
+      - ocfs2-tools
+      - linux-modules-extra-{{ ansible_kernel }}
+
+
+
+- name: Enumerate all cluster hosts within the /etc/hosts file
+  become: true
+  blockinfile:
+    dest: /etc/ocfs2/cluster.conf
+    marker: "# {mark} ANSIBLE MANAGED: ocfs2"
+    content: |
+      {% for host in groups['all'] %}
+      node:
+        ip_port = 7777
+        ip_number = {{ hostvars[host]['ansible_host'] }}
+        number = {{ groups['all'].index(host) }}
+        name = {{ host }}
+        cluster = ocfs2
+      {% endfor %}
+      cluster:
+        node_count = {{ number_instances }}
+        name = ocfs2
+
+- name: Enable ocfs2
+  lineinfile:
+    path: /etc/default/o2cb
+    regexp: '^O2CB_ENABLED='
+    line: O2CB_ENABLED=true
+
+- name: Create a ocfs2 filesystem on /dev/sdb
+  filesystem:
+    fstype: ocfs2
+    dev: /dev/vdb
+    opts: -N {{ number_instances }}
+  run_once: true
+
+- name: Mount brick folder
+  ansible.posix.mount:
+    path: /mnt/
+    src: /dev/vdb
+    fstype: ocfs2
+    state: mounted

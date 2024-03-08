@@ -1,0 +1,17 @@
+---
+number_instances: 3
+state: present
+instance_name: cinder
+os_image: Ubuntu-22.04
+ssh_user: ubuntu
+jumpHostIP:
+flavor: standard.large
+volume_name: multi-attach-test
+volume_size: 5
+# In Gigabytes
+
+internal_ips:
+  - 193.166.85.0/24
+  - 193.166.1.0/24
+  - 193.166.2.0/24
+  - 193.166.80.0/23

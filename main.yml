@@ -1,0 +1,22 @@
+---
+
+- name: Create servers
+  hosts: localhost
+  vars_prompt:
+    - name: key_name
+      prompt: Key name?
+      private: false
+    - name: network
+      prompt: Network?
+      private: false
+  roles:
+    - instances
+    - openstack_facts
+
+- name: Configure VMs
+  hosts: created_instances
+  gather_facts: false
+  become: true
+  roles:
+  - hosts
+  - ocfs2

@@ -1,0 +1,57 @@
+## Create instance
+- name: Create instance
+  openstack.cloud.server:
+    state: "{{ state }}"
+    name: "{{ item }}"
+    image: "{{ os_image }}"
+    flavor: "{{ flavor }}"
+    key_name: "{{ key_name }}"
+    network: "{{ network }}"
+    auto_ip: false
+    security_groups: "default"
+    meta:
+      hostname: "{{ instance_name }}"
+      group: "{{ instance_name }}"
+  retries: 3
+  async: 300
+  poll: 0
+  register: servers
+  with_sequence: start=1 end={{ number_instances }} format={{ instance_name }}-%d
+
+- name: Checking instance started
+  async_status:
+    jid: "{{ item.ansible_job_id }}"
+  register: srv
+  until: srv.finished
+  retries: 60
+  delay: 5
+  with_items:
+    - "{{ servers.results }}"
+
+- name: Waiting for IP and Check
+  async_status:
+    jid: "{{ item.ansible_job_id }}"
+  register: srv_ip
+  until: srv_ip.finished
+  retries: 60
+  delay: 1
+  with_items:
+    - "{{ servers.results }}"
+
+#
+# Volume
+#
+- name: create test volume
+  openstack.cloud.volume:
+    state: present
+    size: "{{ volume_size }}"
+    name: "{{ volume_name }}"
+
+- name: "Attach the volumes to node"
+  openstack.cloud.server_volume:
+    state: present
+    server: "{{ item.item }}"
+    volume: "{{ volume_name }}"
+  with_items:
+    - "{{ servers.results }}"
+
