@@ -17,7 +17,7 @@
     name: "{{ item.name }}"
     groups: created_instances
     ansible_host: "{{ item.addresses[network][0].addr }}"
-    ansible_user: almalinux
+    ansible_user: ubuntu
     ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o 'ProxyCommand ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -W %h:%p {{ ssh_user }}@{{ jumpHostIP }}' "
   with_items:
     - "{{ server_facts.results[0].servers }}"

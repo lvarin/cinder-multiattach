@@ -4,6 +4,7 @@ state: present
 instance_name: cinder
 os_image: Ubuntu-22.04
 ssh_user: ubuntu
+kernel_version: 6.5.0-21-generic
 jumpHostIP:
 flavor: standard.large
 volume_name: multi-attach-test
