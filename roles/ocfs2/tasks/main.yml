@@ -18,11 +18,11 @@
         ip_address = {{ hostvars[host]['ansible_host'] }}
         number = {{ groups['all'].index(host)+1 }}
         name = {{ host }}
-        cluster = cinder
+        cluster = ocfs2
       {% endfor %}
       cluster:
         node_count = {{ number_instances }}
-        name = cinder
+        name = ocfs2
 
 - name: Enable ocfs2
   lineinfile:
