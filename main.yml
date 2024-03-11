@@ -9,6 +9,8 @@
     - name: network
       prompt: Network?
       private: false
+    - name: jumpHostIP
+      prompt: Jump Host IP?
   roles:
     - instances
     - openstack_facts
