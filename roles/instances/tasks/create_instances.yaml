@@ -49,6 +49,11 @@
     volume_type: multiattach
     is_multiattach: true
 
+#
+# It does not work. One needs to run the command manualy:
+#
+#    $ openstack --os-compute-api-version 2.60 server add volume "cinder-2" multi-attach-test
+#
 - name: "Attach the volumes to node"
   openstack.cloud.server_volume:
     state: present
