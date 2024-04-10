@@ -1,0 +1,69 @@
+---
+
+- name: Enable repositories
+  community.general.dnf_config_manager:
+    name:
+    - highavailability
+    - resilientstorage
+    state: enabled
+
+- name: Install packages
+  dnf:
+    name:
+      - pacemaker
+      - corosync
+      - pcs
+      - dlm
+      - gfs2-utils
+
+- name: Enumerate all cluster hosts within the /etc/corosync/corosync.conf file
+  become: true
+  copy:
+    dest: /etc/corosync/corosync.conf
+    content: |
+      totem {
+          version: 2
+          cluster_name: gfs_cluster
+          secauth: off
+          transport: udpu
+      }
+
+      nodelist {
+      {% for host in groups['all'] %}
+      node {
+           ring0_addr: {{ host }}
+           nodeid: {{ groups['all'].index(host)+1 }}
+      }
+      {% endfor %}
+      }
+
+      quorum {
+          provider: corosync_votequorum
+      }
+
+      logging {
+          to_logfile: yes
+          logfile: /var/log/cluster/corosync.log
+          to_syslog: yes
+      }
+
+- name: Enble and start dlm
+  service:
+    name: dlm
+    state: started
+    enabled: yes
+
+# Gfs2 is not supported by filesystem
+- name: Create a gfs2 filesystem on /dev/sdb
+  filesystem:
+    fstype: gfs2
+    dev: /dev/vdb
+    opts: -p lock_dlm -t gfs_cluster:mygfs2 -j {{ number_instances }}
+  run_once: true
+
+- name: Mount brick folder
+  ansible.posix.mount:
+    path: /mnt/
+    src: /dev/vdb
+    fstype: ocfs2
+    state: mounted

@@ -6,19 +6,25 @@
     - name: key_name
       prompt: Key name?
       private: false
+      default: alvaro
     - name: network
       prompt: Network?
       private: false
+      default: project_2001316
     - name: jumpHostIP
       prompt: Jump Host IP?
+      default: 86.50.169.241
   roles:
-    - instances
-    - openstack_facts
+    - role: instances
+    - role: openstack_facts
 
 - name: Configure VMs
   hosts: created_instances
   gather_facts: false
   become: true
   roles:
-  - hosts
-  - ocfs2
+    - role: hosts
+    - role: ocfs2
+      when: fs == 'ocfs2'
+    - role: gfs2
+      when: fs == 'gfs2'

@@ -1,4 +1,18 @@
 ## Create instance
+
+- name: Ocfs2 variables
+  include_vars:
+    file: ocfs2.yml
+    #name: ovfs2
+  when: fs == 'ocfs2'
+
+- name: Gfs2 variables
+  include_vars:
+    file: gfs2.yml
+      #name: gfs2
+  when: fs == 'gfs2'
+
+   
 - name: Create instance
   openstack.cloud.server:
     state: "{{ state }}"

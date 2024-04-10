@@ -2,8 +2,8 @@
 number_instances: 3
 state: present
 instance_name: cinder
-os_image: Ubuntu-22.04
-ssh_user: ubuntu
+  #os_image: Ubuntu-22.04
+  #ssh_user: ubuntu
 kernel_version: 6.5.0-21-generic
 flavor: standard.large
 volume_name: multi-attach-test
@@ -15,3 +15,5 @@ internal_ips:
   - 193.166.1.0/24
   - 193.166.2.0/24
   - 193.166.80.0/23
+
+fs: ocfs2
