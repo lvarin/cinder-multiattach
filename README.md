@@ -2,11 +2,11 @@
 
 This is a simple ansible playbook to configure a cluster of VMs for seeing how cinder multi-attach works.
 
-I used this article as the main source: https://docs.syseleven.de/syseleven-stack/en/tutorials/cinder-multiattach
+For the ocfs2 filesystem, I used this article as the main source: https://docs.syseleven.de/syseleven-stack/en/tutorials/cinder-multiattach
 
 ![Architecture](multi-attach.drawio.svg)
 
-The Archtecture is very simple. A single cinder volume, of the type `multiattach`, mounted in everyone of the VM nodes (limited to 255 nodes). Then a small gateway VM to access the VMs by SSH.
+The Architecture is very simple. A single cinder volume, of the type `multiattach`, mounted in every single one of the VM nodes (limited to 255 nodes in `ocfs2`). Then a small gateway VM to access the VMs by SSH.
 
 # Deploy
 

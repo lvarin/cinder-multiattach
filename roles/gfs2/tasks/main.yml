@@ -65,5 +65,5 @@
   ansible.posix.mount:
     path: /mnt/
     src: /dev/vdb
-    fstype: ocfs2
+    fstype: gfs2
     state: mounted
