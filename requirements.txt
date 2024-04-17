@@ -1,2 +1,2 @@
 ansible
-openstacksdk>=4.0.1
+python-openstackclient>=4.0.1
