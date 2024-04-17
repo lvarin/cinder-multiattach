@@ -54,7 +54,7 @@
     enabled: yes
 
 # Gfs2 is not supported by filesystem
-- name: Create a gfs2 filesystem on /dev/sdb
+- name: Create a gfs2 filesystem on /dev/vdb
   filesystem:
     fstype: gfs2
     dev: /dev/vdb
