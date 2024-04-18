@@ -6,7 +6,7 @@
     - name: key_name
       prompt: Key name?
       private: false
-      default: alvaro
+      # default: <username> 
     - name: network
       prompt: Network?
       private: false
