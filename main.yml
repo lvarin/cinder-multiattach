@@ -13,7 +13,7 @@
       default: project_2001316
     - name: jumpHostIP
       prompt: Jump Host IP?
-      default: 86.50.169.241
+      # default: <IP>
   roles:
     - role: instances
     - role: openstack_facts
