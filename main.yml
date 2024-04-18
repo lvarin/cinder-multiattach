@@ -10,7 +10,7 @@
     - name: network
       prompt: Network?
       private: false
-      default: project_2001316
+      # default: <project_XXXXXXX>
     - name: jumpHostIP
       prompt: Jump Host IP?
       # default: <IP>
