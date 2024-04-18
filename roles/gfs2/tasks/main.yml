@@ -54,12 +54,33 @@
     enabled: yes
 
 # Gfs2 is not supported by filesystem
+#- name: Create a gfs2 filesystem on /dev/vdb
+#  filesystem:
+#    fstype: gfs2
+#    dev: /dev/vdb
+#    opts: -p lock_dlm -t gfs_cluster:mygfs2 -j {{ number_instances }}
+#  run_once: true
+
+- name: Check whether the gfs2 file system resource exists
+  ansible.builtin.shell:
+    cmd: /sbin/blkid | grep /dev/vdb
+  register: fs_resource_exists
+  failed_when: false
+  changed_when: false
+
 - name: Create a gfs2 filesystem on /dev/vdb
-  filesystem:
-    fstype: gfs2
-    dev: /dev/vdb
-    opts: -p lock_dlm -t gfs_cluster:mygfs2 -j {{ number_instances }}
+  ansible.builtin.command:
+    argv:
+      - mkfs.gfs2
+      - -p
+      - lock_dlm
+      - -t
+      - gfs_cluster:mygfs2
+      - -j
+      - "{{ number_instances }}"
+      - /dev/vdb
   run_once: true
+  when: fs_resource_exists.rc != 0
 
 - name: Mount brick folder
   ansible.posix.mount:
