@@ -1,0 +1,90 @@
+---
+
+- name: Enable repositories
+  community.general.dnf_config_manager:
+    name:
+    - highavailability
+    - resilientstorage
+    state: enabled
+
+- name: Install packages
+  dnf:
+    name:
+      - pacemaker
+      - corosync
+      - pcs
+      - dlm
+      - gfs2-utils
+
+- name: Enumerate all cluster hosts within the /etc/corosync/corosync.conf file
+  become: true
+  copy:
+    dest: /etc/corosync/corosync.conf
+    content: |
+      totem {
+          version: 2
+          cluster_name: gfs_cluster
+          secauth: off
+          transport: udpu
+      }
+
+      nodelist {
+      {% for host in groups['all'] %}
+      node {
+           ring0_addr: {{ host }}
+           nodeid: {{ groups['all'].index(host)+1 }}
+      }
+      {% endfor %}
+      }
+
+      quorum {
+          provider: corosync_votequorum
+      }
+
+      logging {
+          to_logfile: yes
+          logfile: /var/log/cluster/corosync.log
+          to_syslog: yes
+      }
+
+- name: Enble and start dlm
+  service:
+    name: dlm
+    state: started
+    enabled: yes
+
+# Gfs2 is not supported by filesystem
+#- name: Create a gfs2 filesystem on /dev/vdb
+#  filesystem:
+#    fstype: gfs2
+#    dev: /dev/vdb
+#    opts: -p lock_dlm -t gfs_cluster:mygfs2 -j {{ number_instances }}
+#  run_once: true
+
+- name: Check whether the gfs2 file system resource exists
+  ansible.builtin.shell:
+    cmd: /sbin/blkid | grep /dev/vdb
+  register: fs_resource_exists
+  failed_when: false
+  changed_when: false
+
+- name: Create a gfs2 filesystem on /dev/vdb
+  ansible.builtin.command:
+    argv:
+      - mkfs.gfs2
+      - -p
+      - lock_dlm
+      - -t
+      - gfs_cluster:mygfs2
+      - -j
+      - "{{ number_instances }}"
+      - /dev/vdb
+  run_once: true
+  when: fs_resource_exists.rc != 0
+
+- name: Mount brick folder
+  ansible.posix.mount:
+    path: /mnt/
+    src: /dev/vdb
+    fstype: gfs2
+    state: mounted

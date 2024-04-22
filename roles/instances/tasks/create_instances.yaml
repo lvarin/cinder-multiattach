@@ -1,4 +1,18 @@
 ## Create instance
+
+- name: Ocfs2 variables
+  include_vars:
+    file: ocfs2.yml
+    #name: ovfs2
+  when: fs == 'ocfs2'
+
+- name: Gfs2 variables
+  include_vars:
+    file: gfs2.yml
+      #name: gfs2
+  when: fs == 'gfs2'
+
+   
 - name: Create instance
   openstack.cloud.server:
     state: "{{ state }}"
@@ -16,7 +30,7 @@
   async: 300
   poll: 0
   register: servers
-  with_sequence: start=1 end={{ number_instances }} format={{ instance_name }}-%d
+  with_sequence: start=1 end={{ number_instances }} format={{ instance_name }}-{{ fs }}-%d
 
 - name: Checking instance started
   async_status:
@@ -45,7 +59,7 @@
   openstack.cloud.volume:
     state: present
     size: "{{ volume_size }}"
-    name: "{{ volume_name }}"
+    name: "{{ volume_name }}-{{ fs }}"
     volume_type: multiattach
     is_multiattach: true
 
@@ -58,7 +72,7 @@
   openstack.cloud.server_volume:
     state: present
     server: "{{ item.item }}"
-    volume: "{{ volume_name }}"
+    volume: "{{ volume_name }}-{{ fs }}"
   with_items:
     - "{{ servers.results }}"
 
