@@ -1,5 +1,5 @@
 ---
-number_instances: 3
+number_instances: 15
 state: present
 instance_name: cinder
   #os_image: Ubuntu-22.04

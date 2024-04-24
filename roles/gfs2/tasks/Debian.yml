@@ -1,0 +1,7 @@
+
+- name: Install modules and gfs2
+  apt:
+    name:
+      - gfs2-utils
+      - dlm-controld
+      - linux-modules-extra-{{ ansible_kernel }}

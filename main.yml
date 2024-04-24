@@ -23,7 +23,7 @@
 
 - name: Configure VMs
   hosts: created_instances
-  gather_facts: false
+  gather_facts: true
   become: true
   roles:
     - role: hosts

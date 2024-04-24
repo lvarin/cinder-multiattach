@@ -1,20 +1,6 @@
 ---
 
-- name: Enable repositories
-  community.general.dnf_config_manager:
-    name:
-    - highavailability
-    - resilientstorage
-    state: enabled
-
-- name: Install packages
-  dnf:
-    name:
-      - pacemaker
-      - corosync
-      - pcs
-      - dlm
-      - gfs2-utils
+- include_tasks: "{{ ansible_distribution_file_variety }}.yml"
 
 - name: Enumerate all cluster hosts within the /etc/corosync/corosync.conf file
   become: true
@@ -47,7 +33,7 @@
           to_syslog: yes
       }
 
-- name: Enble and start dlm
+- name: Enable and start dlm
   service:
     name: dlm
     state: started
@@ -72,6 +58,7 @@
   ansible.builtin.command:
     argv:
       - mkfs.gfs2
+      - -O
       - -p
       - lock_dlm
       - -t
