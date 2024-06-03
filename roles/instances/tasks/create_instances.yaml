@@ -60,7 +60,7 @@
     state: present
     size: "{{ volume_size }}"
     name: "{{ volume_name }}-{{ fs }}"
-    volume_type: multiattach
+    volume_type: standard.multiattach
     is_multiattach: true
 
 #

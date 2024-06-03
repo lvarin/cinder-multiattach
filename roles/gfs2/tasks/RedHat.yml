@@ -15,4 +15,6 @@
       - dlm
       - gfs2-utils
 
-
+- name: Set Corosync log folder
+  set_fact:
+    corosync_log: /var/log/cluster
