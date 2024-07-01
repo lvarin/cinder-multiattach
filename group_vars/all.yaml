@@ -1,19 +1,27 @@
 ---
-number_instances: 15
+number_instances: 3
 state: present
-instance_name: cinder
-  #os_image: Ubuntu-22.04
-  #ssh_user: ubuntu
-kernel_version: 6.5.0-21-generic
+instance_name: gfs
 flavor: standard.large
-volume_name: multi-attach-test
-volume_size: 5
-# In Gigabytes
-
+volume_name: multi-test
+volume_size: 10 # In Gigabytes
 internal_ips:
   - 193.166.85.0/24
   - 193.166.1.0/24
   - 193.166.2.0/24
   - 193.166.80.0/23
 
-fs: ocfs2
+# CSC credentials. Can be a robot account (https://docs.csc.fi/accounts/how-to-create-new-user-account/#getting-a-machine-to-machine-robot-account)
+# Used for fence_openstack (https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/configuring_a_red_hat_high_availability_cluster_on_red_hat_openstack_platform/index)
+csc_username: 
+csc_password: 
+
+## GFS2 ##
+pcmk_cluster_name: ansible-cluster
+pcmk_user: hacluster
+fence_name: fenceopenstack
+fsname: gfs2-demo
+mnt_directory: /mnt/gfs
+
+# gfs2 or ocsf2
+fs: gfs2

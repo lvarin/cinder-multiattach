@@ -14,7 +14,12 @@
       - pcs
       - dlm
       - gfs2-utils
+      - lvm2-lockd
+      - fence-agents-openstack
+      - pip
 
-- name: Set Corosync log folder
-  set_fact:
-    corosync_log: /var/log/cluster
+- name: Pip install
+  ansible.builtin.pip:
+    name:
+      - python-openstackclient
+      - python-novaclient
