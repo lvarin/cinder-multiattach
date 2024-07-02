@@ -1,9 +1,9 @@
 ---
 number_instances: 3
 state: present
-instance_name: gfs
+instance_name: cinder
 flavor: standard.large
-volume_name: multi-test
+volume_name: multi-attach-test
 volume_size: 10 # In Gigabytes
 internal_ips:
   - 193.166.85.0/24
