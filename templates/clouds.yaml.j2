@@ -1,0 +1,12 @@
+clouds:
+  openstack:
+    auth:
+      auth_url: https://pouta.csc.fi:5001/v3
+      project_name: {{ network }}
+      username: {{ csc_username }}
+      password: {{ csc_password }}
+      user_domain_name: Default
+      project_domain_name: Default
+  regions: 
+  - regionOne
+  verify: False

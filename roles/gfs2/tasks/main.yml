@@ -1,84 +1,175 @@
 ---
 
+# # CHECK
+# - name: Check hosts
+#   debug:
+#     var: "{{ hostvars[item]['ansible_hostname'] }}:{{ hostvars[item]['ansible_product_uuid'] }}"
+#   with_items:
+#     - "{{ groups['created_instances'] }}"
+
+# - name: Check hosts part II
+#   debug:
+#     var: "{{ ansible_play_batch | join(' ') }}"
+
+# - name: Set node:node_UUID
+#   ansible.builtin.shell: |
+#     for i in {1..{{ number_instances }}}; do
+#       NODE_ID=$(/usr/local/bin/openstack --os-cloud=openstack server show {{ instance_name }}-{{ fs }}-$i -f value -c id)
+#       NODE_NAME_ID+={{ instance_name }}-{{ fs }}-$i:$NODE_ID";"
+#     done
+#     echo $NODE_NAME_ID
+#   run_once: true
+
+# - name: Check
+#   debug:
+#     msg: "{{ NODE_NAME_ID }}"
+
+# - name: PAUSE
+#   ansible.builtin.pause:
+# #
+
 - include_tasks: "{{ ansible_distribution_file_variety }}.yml"
 
-- name: Enumerate all cluster hosts within the /etc/corosync/corosync.conf file
-  become: true
-  copy:
-    dest: /etc/corosync/corosync.conf
-    content: |
-      totem {
-          version: 2
-          cluster_name: gfs_cluster
-          secauth: off
-          transport: udpu
-      }
-
-      nodelist {
-      {% for host in groups['all'] %}
-      node {
-           ring0_addr: {{ host }}
-           nodeid: {{ groups['all'].index(host)+1 }}
-      }
-      {% endfor %}
-      }
-
-      quorum {
-          provider: corosync_votequorum
-      }
-
-      logging {
-          to_logfile: yes
-          logfile: {{ corosync_log }}/corosync.log
-          to_syslog: yes
-      }
-  register: service_conf
-
-- name: restart service
-  service:
-    name: corosync
-    state: restarted
-  when: service_conf.changed
-
-- name: Enable and start dlm
-  service:
-    name: dlm
+####################
+## CLUSTER SETUP ###
+####################
+- name: Start PCS daemon
+  ansible.builtin.service:
+    name: pcsd
+    enabled: true
     state: started
-    enabled: yes
 
-# Gfs2 is not supported by filesystem
-#- name: Create a gfs2 filesystem on /dev/vdb
-#  filesystem:
-#    fstype: gfs2
-#    dev: /dev/vdb
-#    opts: -p lock_dlm -t gfs_cluster:mygfs2 -j {{ number_instances }}
-#  run_once: true
-
-- name: Check whether the gfs2 file system resource exists
-  ansible.builtin.shell:
-    cmd: /sbin/blkid | grep /dev/vdb
-  register: fs_resource_exists
-  failed_when: false
-  changed_when: false
-
-- name: Create a gfs2 filesystem on /dev/vdb
-  ansible.builtin.command:
-    argv:
-      - mkfs.gfs2
-      - -O
-      - -p
-      - lock_dlm
-      - -t
-      - gfs_cluster:mygfs2
-      - -j
-      - "{{ number_instances }}"
-      - /dev/vdb
+- name: Generate password for hacluster
+  set_fact:
+    pcmk_pass: "{{ ansible_machine_id | to_uuid }}"
   run_once: true
-  when: fs_resource_exists.rc != 0
+  when: pcmk_password is not defined
 
-- name: Mount brick folder
-  ansible.posix.mount:
-    path: /mnt/
-    src: /dev/vdb
-    fstype: gfs2
-    state: mounted
+- name: Set password for {{ pcmk_user }}
+  ansible.builtin.user:
+    name: "{{ pcmk_user }}"
+    system: true
+    password: "{{ pcmk_pass | password_hash('sha512') }}"
+
+- name: Authenticate all nodes
+  ansible.builtin.command:
+    pcs host auth {{ ansible_play_batch | join(' ') }} -u {{ pcmk_user }} -p {{ pcmk_pass | quote }}
+  run_once: true
+
+- name: Setup cluster
+  ansible.builtin.command:
+    pcs cluster setup {{ pcmk_cluster_name }} {{ ansible_play_batch | join(' ') }}
+  run_once: true
+
+- name: Start all nodes
+  ansible.builtin.command:
+    pcs cluster start --all
+  run_once: true
+
+
+####################
+## FENCING SETUP ###
+####################
+- name: Run some prerequisites
+  ansible.builtin.shell: |
+    setenforce 0
+    sed -i.bak "s/SELINUX=enforcing/SELINUX=permissive/g" /etc/selinux/config
+
+- name: Ensure that /etc/openstack exists
+  ansible.builtin.file:
+    path: /etc/openstack
+    state: directory
+
+- name: Copy clouds.yaml file
+  ansible.builtin.template:
+    src: templates/clouds.yaml.j2
+    dest: /etc/openstack/clouds.yaml
+
+- name: Set STONITH
+  ansible.builtin.command:
+    pcs property set stonith-enabled=true
+  run_once: true
+
+- name: Creation of fencing OPENSTACK
+  ansible.builtin.shell: |
+    for i in {1..{{ number_instances }}}; do
+      NODE_ID=$(/usr/local/bin/openstack --os-cloud=openstack server show {{ instance_name }}-{{ fs }}-$i -f value -c id)
+      NODE_NAME_ID+={{ instance_name }}-{{ fs }}-$i:$NODE_ID";"
+    done
+    pcs stonith create {{ fence_name }} fence_openstack pcmk_host_map=$NODE_NAME_ID power_timeout="240" pcmk_reboot_timeout="480" pcmk_reboot_retries="4" cloud="openstack"
+  run_once: true
+
+#################
+## GFS2 SETUP ###
+#################
+- name: LVM prerequisites
+  ansible.builtin.command: 
+    sed -i.bak "s/# use_lvmlockd = 0/use_lvmlockd = 1/g" /etc/lvm/lvm.conf
+
+- name: No quorum policy
+  ansible.builtin.command:
+    pcs property set no-quorum-policy=freeze
+  run_once: true
+
+- name: Setup a DLM (Distributed Lock Manager) resource
+  ansible.builtin.command:
+    pcs resource create dlm --group locking ocf:pacemaker:controld op monitor interval=30s on-fail=fence
+  run_once: true
+
+- name: Clone the DLM resource
+  ansible.builtin.command:
+    pcs resource clone locking interleave=true
+  run_once: true
+
+- name: Setup a LVM resource
+  ansible.builtin.command:
+    pcs resource create lvmlockd --group locking ocf:heartbeat:lvmlockd op monitor interval=30s on-fail=fence
+  run_once: true
+
+- name: Creation of one shared volume groups
+  ansible.builtin.command:
+    vgcreate --shared shared_vg1 /dev/vdb
+  run_once: true
+
+- name: Adding the shared device
+  ansible.builtin.command:
+    lvmdevices --adddev /dev/vdb
+
+- name: Start the lock manager
+  ansible.builtin.command:
+    vgchange --lockstart shared_vg1
+
+- name: Creation of the Logical Volume
+  ansible.builtin.command:
+    lvcreate --activate sy -L {{ volume_size - 0.1 }}G -n shared_lv1 shared_vg1
+  run_once: true
+
+- name: Format of the Logical Volume
+  ansible.builtin.command:
+    mkfs.gfs2 -O -j {{ number_instances }} -p lock_dlm -t {{ pcmk_cluster_name }}:{{ fsname }} /dev/shared_vg1/shared_lv1
+  run_once: true
+
+- name: Setup LVM-activate resource
+  ansible.builtin.shell: |
+    pcs resource create sharedlv1 --group shared_vg1 ocf:heartbeat:LVM-activate lvname=shared_lv1 vgname=shared_vg1 activation_mode=shared vg_access_mode=lvmlockd
+  run_once: true
+
+- name: Clone LVM-activate resource
+  ansible.builtin.command:
+    pcs resource clone shared_vg1 interleave=true
+  run_once: true
+
+- name: Configuration of ordering constraints
+  ansible.builtin.command:
+    pcs constraint order start locking-clone then shared_vg1-clone
+  run_once: true
+
+- name: Configuration of colocation constraints
+  ansible.builtin.command:
+    pcs constraint colocation add shared_vg1-clone with locking-clone
+  run_once: true
+
+- name: Creation of a filesystem resource to mount the volume
+  ansible.builtin.shell: |
+    pcs resource create sharedfs1 --group shared_vg1 ocf:heartbeat:Filesystem device="/dev/shared_vg1/shared_lv1" directory="{{ mnt_directory }}" fstype="gfs2" options=noatime op monitor interval=10s on-fail=fence
+  run_once: true

@@ -23,9 +23,9 @@
   with_items:
     - "{{ instance_name }}"
 
-- name: Check
-  debug:
-    msg: "{{ server_facts }}"
+# - name: Check
+#   debug:
+#     msg: "{{ server_facts }}"
 
 - name: Building inventory
   add_host:
