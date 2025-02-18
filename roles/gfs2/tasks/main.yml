@@ -56,10 +56,18 @@
     pcs host auth {{ ansible_play_batch | join(' ') }} -u {{ pcmk_user }} -p {{ pcmk_pass | quote }}
   run_once: true
 
+- name: Check if cluster already exists
+  ansible.builtin.shell: |
+    pcs status | grep -q "{{ pcmk_cluster_name }}"
+  register: cluster_exists
+  ignore_errors: true
+  run_once: true
+
 - name: Setup cluster
   ansible.builtin.command:
     pcs cluster setup {{ pcmk_cluster_name }} {{ ansible_play_batch | join(' ') }}
   run_once: true
+  when: cluster_exists.rc != 0
 
 - name: Start all nodes
   ansible.builtin.command:
@@ -90,6 +98,13 @@
     pcs property set stonith-enabled=true
   run_once: true
 
+- name: Check if fence already exists
+  ansible.builtin.shell: |
+    pcs stonith | grep -q "{{ fence_name }}"
+  register: fence_exists
+  ignore_errors: true
+  run_once: true
+
 - name: Creation of fencing OPENSTACK
   ansible.builtin.shell: |
     for i in {1..{{ number_instances }}}; do
@@ -98,6 +113,8 @@
     done
     pcs stonith create {{ fence_name }} fence_openstack pcmk_host_map=$NODE_NAME_ID power_timeout="240" pcmk_reboot_timeout="480" pcmk_reboot_retries="4" cloud="openstack"
   run_once: true
+  when: fence_exists.rc != 0
+
 
 #################
 ## GFS2 SETUP ###
@@ -111,65 +128,132 @@
     pcs property set no-quorum-policy=freeze
   run_once: true
 
+- name: Check if DLM already exists
+  ansible.builtin.shell: |
+    pcs resource config | grep -q "dlm"
+  register: dlm_exists
+  ignore_errors: true
+  run_once: true
+
 - name: Setup a DLM (Distributed Lock Manager) resource
   ansible.builtin.command:
     pcs resource create dlm --group locking ocf:pacemaker:controld op monitor interval=30s on-fail=fence
   run_once: true
+  when: dlm_exists.rc != 0
 
 - name: Clone the DLM resource
   ansible.builtin.command:
     pcs resource clone locking interleave=true
+  run_once: true
+  when: dlm_exists.rc != 0
+
+- name: Check if LVM already exists
+  ansible.builtin.shell: |
+    pcs resource config | grep -q "lvmlockd"
+  register: lvmlockd_exists
+  ignore_errors: true
   run_once: true
 
 - name: Setup a LVM resource
   ansible.builtin.command:
     pcs resource create lvmlockd --group locking ocf:heartbeat:lvmlockd op monitor interval=30s on-fail=fence
   run_once: true
+  when: lvmlockd_exists.rc != 0
+
+- name: Check if shared volume groups aleady exists
+  ansible.builtin.shell: |
+    vgs | grep -q "shared_vg1"
+  register: vg_exists
+  ignore_errors: true
+  run_once: true
 
 - name: Creation of one shared volume groups
   ansible.builtin.command:
     vgcreate --shared shared_vg1 /dev/vdb
   run_once: true
+  when: vg_exists.rc != 0
 
 - name: Adding the shared device
   ansible.builtin.command:
     lvmdevices --adddev /dev/vdb
-
+  
 - name: Start the lock manager
   ansible.builtin.command:
     vgchange --lockstart shared_vg1
+
+- name: Check if logical volume aleady exists
+  ansible.builtin.shell: |
+    lvs | grep -q "shared_lv1"
+  register: lv_exists
+  ignore_errors: true
+  run_once: true
 
 - name: Creation of the Logical Volume
   ansible.builtin.command:
     lvcreate --activate sy -L {{ volume_size - 0.1 }}G -n shared_lv1 shared_vg1
   run_once: true
+  when: lv_exists.rc != 0
 
 - name: Format of the Logical Volume
   ansible.builtin.command:
     mkfs.gfs2 -O -j {{ number_instances }} -p lock_dlm -t {{ pcmk_cluster_name }}:{{ fsname }} /dev/shared_vg1/shared_lv1
+  run_once: true
+  when: lv_exists.rc != 0
+
+- name: Check if sharedlv1 exists
+  ansible.builtin.shell: |
+    pcs resource config | grep -q "sharedlv1"
+  register: sharedlv1_exists
+  ignore_errors: true
   run_once: true
 
 - name: Setup LVM-activate resource
   ansible.builtin.shell: |
     pcs resource create sharedlv1 --group shared_vg1 ocf:heartbeat:LVM-activate lvname=shared_lv1 vgname=shared_vg1 activation_mode=shared vg_access_mode=lvmlockd
   run_once: true
+  when: sharedlv1_exists.rc != 0
 
 - name: Clone LVM-activate resource
   ansible.builtin.command:
     pcs resource clone shared_vg1 interleave=true
+  run_once: true
+  when: sharedlv1_exists.rc != 0
+
+- name: Check if constraint order exists
+  ansible.builtin.shell: |
+    pcs constraint order show | grep -q "'locking-clone' then start resource 'shared_vg1-clone'"
+  register: order_exists
+  ignore_errors: true
   run_once: true
 
 - name: Configuration of ordering constraints
   ansible.builtin.command:
     pcs constraint order start locking-clone then shared_vg1-clone
   run_once: true
+  when: order_exists.rc != 0
+
+- name: Check if colocation constraints exists
+  ansible.builtin.shell: |
+    pcs constraint colocation show | grep -q "'shared_vg1-clone' with resource 'locking-clone'"
+  register: colocation_exists
+  ignore_errors: true
+  run_once: true
 
 - name: Configuration of colocation constraints
   ansible.builtin.command:
     pcs constraint colocation add shared_vg1-clone with locking-clone
+  run_once: true
+  when: colocation_exists.rc != 0
+
+- name: Check if sharedfs1 exists
+  ansible.builtin.shell: |
+    pcs resource config | grep -q "sharedfs1"
+  register: sharedfs1_exists
+  ignore_errors: true
   run_once: true
 
 - name: Creation of a filesystem resource to mount the volume
   ansible.builtin.shell: |
     pcs resource create sharedfs1 --group shared_vg1 ocf:heartbeat:Filesystem device="/dev/shared_vg1/shared_lv1" directory="{{ mnt_directory }}" fstype="gfs2" options=noatime op monitor interval=10s on-fail=fence
   run_once: true
+  when: sharedfs1_exists.rc != 0
